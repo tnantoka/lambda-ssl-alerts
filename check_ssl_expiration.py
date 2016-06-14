@@ -22,7 +22,6 @@ import socket
 import ssl
 
 sns = boto3.client('sns')
-cloudfront = boto3.client('cloudfront')
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -101,21 +100,17 @@ def check_domain(domain, buffer_days=14):
 
 def lambda_handler(event, context):
     results = []
-    for dist in cloudfront.list_distributions()['DistributionList']['Items']:
-        if dist.get('ViewerCertificate', {}).get('CloudFrontDefaultCertificate', False):
-            # this distribution uses default cloudfront SSL
-            # so we aren't in charge of renewing it
-            logger.info("Distribution %s doesn't use custom SSL, skipping" % dist['Id'])
-            continue
-
-        domain = dist['Aliases']['Items'][0]
+    domains = [
+        'example.com',
+    ]
+    for domain in domains:
         result = check_domain(domain, event.get('buffer_days', 14))
         results.append(result)
         logger.debug("Got result %s for domain %s" % (json.dumps(result), domain))
-        if result['cert_status'] != 'OK' and event.get('topic', False):
+        if result['cert_status'] != 'OK':
             # If cert expires soon and we have a notification topic
             sns.publish(
-                TopicArn=event['topic'],
+                TopicArn=event['arn:aws:sns:'],
                 Message=json.dumps(result)
             )
     return results
